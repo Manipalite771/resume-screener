@@ -223,6 +223,3 @@ if analyze_btn:
             except Exception as e:
                 st.error(f"Error analyzing resume: {str(e)}")
 
-# Footer
-st.markdown("---")
-st.caption("This tool uses OpenAI GPT-5.2 to evaluate resumes against predefined criteria for the GenAI Delivery Lead role.")
