@@ -182,7 +182,7 @@ if not api_configured:
         st.session_state.gemini_api_key = api_key_input
         st.rerun()
 else:
-    st.success("API configured", icon="✓")
+    st.success("API configured")
 
 st.markdown("---")
 
