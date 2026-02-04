@@ -137,8 +137,9 @@ def init_gemini():
 
     # Try to get from Streamlit secrets first (for deployment)
     try:
-        api_key = st.secrets["GEMINI_API_KEY"]
-    except (KeyError, FileNotFoundError):
+        if "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
         pass
 
     # Fall back to session state (for manual entry)
