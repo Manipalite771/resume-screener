@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from openai import OpenAI
 
 # Page config
 st.set_page_config(
@@ -7,6 +7,9 @@ st.set_page_config(
     page_icon="📋",
     layout="wide"
 )
+
+# Model configuration
+MODEL = "gpt-5.2"
 
 # Prompt template
 SCREENING_PROMPT = """# Task
@@ -131,35 +134,38 @@ Provide your analysis in the following format:
 """
 
 
-def init_gemini():
-    """Initialize Gemini with API key from secrets or session state."""
+def get_api_key():
+    """Get OpenAI API key from secrets or session state."""
     api_key = None
 
     # Try to get from Streamlit secrets first (for deployment)
     try:
-        if "GEMINI_API_KEY" in st.secrets:
-            api_key = st.secrets["GEMINI_API_KEY"]
+        if "OPENAI_API_KEY" in st.secrets:
+            api_key = st.secrets["OPENAI_API_KEY"]
     except Exception:
         pass
 
     # Fall back to session state (for manual entry)
-    if not api_key and "gemini_api_key" in st.session_state:
-        api_key = st.session_state.gemini_api_key
+    if not api_key and "openai_api_key" in st.session_state:
+        api_key = st.session_state.openai_api_key
 
-    if api_key:
-        genai.configure(api_key=api_key)
-        return True
-    return False
+    return api_key
 
 
-def analyze_resume(resume_text: str) -> str:
-    """Send resume to Gemini for analysis."""
-    model = genai.GenerativeModel("gemini-3-pro-preview")
+def analyze_resume(resume_text: str, api_key: str) -> str:
+    """Send resume to GPT-5.2 for analysis."""
+    client = OpenAI(api_key=api_key)
 
     prompt = SCREENING_PROMPT.format(resume=resume_text)
 
-    response = model.generate_content(prompt)
-    return response.text
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    return response.choices[0].message.content
 
 
 # Main UI
@@ -169,17 +175,17 @@ st.subheader("GenAI Productization & Delivery Lead (Life Sciences)")
 st.markdown("---")
 
 # API Key handling
-api_configured = init_gemini()
+api_key = get_api_key()
 
-if not api_configured:
-    st.warning("Gemini API key not configured. Please enter your API key below.")
+if not api_key:
+    st.warning("OpenAI API key not configured. Please enter your API key below.")
     api_key_input = st.text_input(
-        "Gemini API Key",
+        "OpenAI API Key",
         type="password",
-        help="Get your API key from https://makersuite.google.com/app/apikey"
+        help="Enter your OpenAI API key"
     )
     if api_key_input:
-        st.session_state.gemini_api_key = api_key_input
+        st.session_state.openai_api_key = api_key_input
         st.rerun()
 else:
     st.success("API configured")
@@ -202,14 +208,15 @@ with col2:
 
 # Process
 if analyze_btn:
+    api_key = get_api_key()
     if not resume_input.strip():
         st.error("Please paste resume content before analyzing.")
-    elif not init_gemini():
-        st.error("Please configure your Gemini API key first.")
+    elif not api_key:
+        st.error("Please configure your OpenAI API key first.")
     else:
         with st.spinner("Analyzing resume against role criteria..."):
             try:
-                result = analyze_resume(resume_input)
+                result = analyze_resume(resume_input, api_key)
                 st.markdown("---")
                 st.markdown("## Analysis Result")
                 st.markdown(result)
@@ -218,4 +225,4 @@ if analyze_btn:
 
 # Footer
 st.markdown("---")
-st.caption("This tool uses Google Gemini 3 Pro to evaluate resumes against predefined criteria for the GenAI Delivery Lead role.")
+st.caption("This tool uses OpenAI GPT-5.2 to evaluate resumes against predefined criteria for the GenAI Delivery Lead role.")
