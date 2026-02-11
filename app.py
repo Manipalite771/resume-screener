@@ -1,5 +1,12 @@
 import streamlit as st
 from openai import OpenAI
+import fitz  # PyMuPDF
+import base64
+import requests
+import tempfile
+import os
+from PIL import Image
+import io
 
 # Page config
 st.set_page_config(
@@ -9,9 +16,57 @@ st.set_page_config(
 )
 
 # Model configuration
-MODEL = "gpt-5.2"
+OPENAI_MODEL = "gpt-5.2"
+GEMINI_MODEL = "gemini-3-pro-preview"
+GEMINI_API_KEY = "AIzaSyB-Z4ucSSHHUynsx5Ecg1qu6k96-XUbSIQ"
 
-# Prompt template
+# Resume Quality Review Prompt (Gemini)
+QUALITY_REVIEW_PROMPT = """You are a professional resume quality reviewer. Analyze the provided resume image(s) and evaluate the document quality based on the following criteria:
+
+## Evaluation Criteria
+
+1. **Spelling & Grammar** (0 or 1)
+   - Check for spelling mistakes, typos, grammatical errors
+   - Look for inconsistent capitalization, punctuation errors
+
+2. **Factual Consistency** (0 or 1)
+   - Check if dates are logical and consistent (no overlapping employment periods)
+   - Verify education timeline makes sense (graduation year vs experience)
+   - Check for inconsistent job titles/company names
+
+3. **Layout & Structure** (0 or 1)
+   - Is the resume well-organized with clear sections?
+   - Consistent formatting (fonts, bullet styles, spacing)
+   - Professional appearance, not cluttered or chaotic
+
+4. **Attention to Detail** (0 or 1)
+   - Consistent date formats throughout
+   - Proper use of bullet points and indentation
+   - No broken formatting, misaligned text, or visual artifacts
+   - Contact information is complete and properly formatted
+
+## Output Format
+
+Provide your analysis in EXACTLY this JSON format (no other text):
+```json
+{
+  "spelling_grammar": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
+  "factual_consistency": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
+  "layout_structure": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
+  "attention_to_detail": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
+  "total_score": X,
+  "verdict": "PASS" or "FAIL",
+  "summary": "Brief 1-2 sentence summary"
+}
+```
+
+**IMPORTANT**:
+- Total score = sum of all four criteria (max 4)
+- PASS if total_score >= 3, otherwise FAIL
+- Be strict but fair - minor issues can be noted but shouldn't fail a criterion unless significant
+"""
+
+# Role Screening Prompt (GPT-5.2)
 SCREENING_PROMPT = """# Task
 
 Review the provided resume against the Guidance provided and basis that recommend if we should proceed with the first round of interview or not
@@ -102,6 +157,10 @@ Quick scorecard TAG can use (simple)
 
 Hire pipeline: only shortlist candidates with 3/4+.
 
+# Quality Review Result
+
+{quality_review}
+
 # Resume
 
 {resume}
@@ -110,7 +169,10 @@ Hire pipeline: only shortlist candidates with 3/4+.
 
 Provide your analysis in the following format:
 
-## Scorecard
+## Resume Quality Review
+{quality_summary}
+
+## Role Fit Scorecard
 | Criteria | Score | Evidence |
 |----------|-------|----------|
 | GenAI literacy (Applied) | 0 or 1 | Brief evidence from resume |
@@ -118,10 +180,14 @@ Provide your analysis in the following format:
 | Stakeholder mgmt + communication | 0 or 1 | Brief evidence from resume |
 | Regulated / healthcare familiarity | 0 or 1 | Brief evidence from resume |
 
-**Total Score: X/4**
+**Role Fit Score: X/4**
+**Quality Penalty: {penalty}**
+**Final Score: X/4**
 
 ## Verdict
 **PROCEED TO INTERVIEW** or **DO NOT PROCEED**
+
+(Note: Candidates need final score of 3/4+ to proceed. Quality review FAIL results in -1 penalty.)
 
 ## Key Strengths
 - Bullet points of relevant strengths
@@ -152,14 +218,186 @@ def get_api_key():
     return api_key
 
 
-def analyze_resume(resume_text: str, api_key: str) -> str:
-    """Send resume to GPT-5.2 for analysis."""
+def convert_pdf_to_images(pdf_bytes):
+    """Convert PDF bytes to list of images with base64 encoding."""
+    images_data = []
+
+    # Open PDF from bytes
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    for page_num, page in enumerate(doc):
+        # Render page to image at 150 DPI for good quality
+        pix = page.get_pixmap(dpi=150)
+
+        # Convert to PIL Image
+        img_data = pix.tobytes("png")
+
+        # Encode to base64
+        base64_data = base64.b64encode(img_data).decode('utf-8')
+
+        images_data.append({
+            'data': base64_data,
+            'mime_type': 'image/png',
+            'page_num': page_num + 1
+        })
+
+    doc.close()
+    return images_data
+
+
+def call_gemini_with_images(images_data, prompt):
+    """Call Gemini API with images for text extraction or quality review."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+    parts = [{"text": prompt}]
+
+    for img in images_data:
+        parts.append({
+            "inline_data": {
+                "mime_type": img['mime_type'],
+                "data": img['data']
+            }
+        })
+
+    payload = {
+        "contents": [{
+            "parts": parts
+        }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 32000
+        }
+    }
+
+    headers = {"Content-Type": "application/json"}
+
+    max_retries = 3
+    retry_delay = 5
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, verify=False, timeout=180)
+
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        parts_result = candidate['content']['parts']
+                        if len(parts_result) > 0 and 'text' in parts_result[0]:
+                            return parts_result[0]['text']
+                return None
+            elif response.status_code == 429:
+                import time
+                time.sleep(retry_delay * 2)
+                retry_delay *= 2
+            else:
+                st.error(f"Gemini API Error {response.status_code}: {response.text[:200]}")
+
+        except Exception as e:
+            st.error(f"Gemini API Exception: {str(e)}")
+
+        if attempt < max_retries - 1:
+            import time
+            time.sleep(retry_delay)
+            retry_delay *= 2
+
+    return None
+
+
+def extract_resume_text(images_data):
+    """Extract text from resume images using Gemini."""
+    extraction_prompt = """Extract ALL text content from this resume image(s).
+
+IMPORTANT:
+- Extract text EXACTLY as written - preserve all details
+- Maintain the structure (sections, bullet points, etc.)
+- Include all dates, company names, job titles, skills, education details
+- Do not summarize or paraphrase - extract verbatim
+- If there are multiple pages, process them in order
+
+Output the complete resume text in a clean, readable format."""
+
+    return call_gemini_with_images(images_data, extraction_prompt)
+
+
+def perform_quality_review(images_data):
+    """Perform quality review on resume images using Gemini."""
+    return call_gemini_with_images(images_data, QUALITY_REVIEW_PROMPT)
+
+
+def parse_quality_review(quality_response):
+    """Parse the quality review JSON response."""
+    import json
+    import re
+
+    try:
+        # Extract JSON from response (it might be wrapped in markdown code blocks)
+        json_match = re.search(r'```json\s*(.*?)\s*```', quality_response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Try to find JSON directly
+            json_str = quality_response
+
+        # Clean up the string
+        json_str = json_str.strip()
+
+        # Parse JSON
+        quality_data = json.loads(json_str)
+        return quality_data
+    except Exception as e:
+        st.warning(f"Could not parse quality review response: {e}")
+        # Return default PASS if parsing fails
+        return {
+            "total_score": 4,
+            "verdict": "PASS",
+            "summary": "Quality review parsing failed - defaulting to PASS",
+            "spelling_grammar": {"score": 1, "issues": []},
+            "factual_consistency": {"score": 1, "issues": []},
+            "layout_structure": {"score": 1, "issues": []},
+            "attention_to_detail": {"score": 1, "issues": []}
+        }
+
+
+def analyze_resume(resume_text: str, quality_data: dict, api_key: str) -> str:
+    """Send resume to GPT-5.2 for analysis with quality review context."""
     client = OpenAI(api_key=api_key)
 
-    prompt = SCREENING_PROMPT.format(resume=resume_text)
+    # Determine penalty
+    quality_verdict = quality_data.get('verdict', 'PASS')
+    penalty = "-1" if quality_verdict == "FAIL" else "0"
+
+    # Build quality summary
+    quality_summary = f"""
+**Quality Verdict: {quality_verdict}**
+- Spelling & Grammar: {quality_data.get('spelling_grammar', {}).get('score', 'N/A')}/1
+- Factual Consistency: {quality_data.get('factual_consistency', {}).get('score', 'N/A')}/1
+- Layout & Structure: {quality_data.get('layout_structure', {}).get('score', 'N/A')}/1
+- Attention to Detail: {quality_data.get('attention_to_detail', {}).get('score', 'N/A')}/1
+- Quality Score: {quality_data.get('total_score', 'N/A')}/4
+- Summary: {quality_data.get('summary', 'N/A')}
+"""
+
+    # Build quality review context for GPT
+    quality_review_context = f"""
+The resume has undergone a quality review with the following results:
+- Verdict: {quality_verdict}
+- Quality Score: {quality_data.get('total_score', 'N/A')}/4
+- Issues Found: {quality_data.get('summary', 'None noted')}
+
+{'IMPORTANT: Since quality review FAILED, apply a -1 penalty to the final score.' if quality_verdict == 'FAIL' else 'Quality review passed - no penalty applied.'}
+"""
+
+    prompt = SCREENING_PROMPT.format(
+        resume=resume_text,
+        quality_review=quality_review_context,
+        quality_summary=quality_summary,
+        penalty=penalty
+    )
 
     response = client.chat.completions.create(
-        model=MODEL,
+        model=OPENAI_MODEL,
         messages=[
             {"role": "user", "content": prompt}
         ]
@@ -192,14 +430,16 @@ else:
 
 st.markdown("---")
 
-# Resume input
-st.markdown("### Paste Resume Content Below")
-resume_input = st.text_area(
-    "Resume",
-    height=400,
-    placeholder="Paste the candidate's resume content here...",
-    label_visibility="collapsed"
+# Resume upload
+st.markdown("### Upload Resume (PDF only)")
+uploaded_file = st.file_uploader(
+    "Choose a PDF file",
+    type=["pdf"],
+    help="Upload the candidate's resume in PDF format"
 )
+
+if uploaded_file:
+    st.success(f"Uploaded: {uploaded_file.name}")
 
 # Analyze button
 col1, col2, col3 = st.columns([1, 1, 1])
@@ -209,17 +449,83 @@ with col2:
 # Process
 if analyze_btn:
     api_key = get_api_key()
-    if not resume_input.strip():
-        st.error("Please paste resume content before analyzing.")
+    if not uploaded_file:
+        st.error("Please upload a PDF resume before analyzing.")
     elif not api_key:
         st.error("Please configure your OpenAI API key first.")
     else:
-        with st.spinner("Analyzing resume against role criteria..."):
+        # Read PDF bytes
+        pdf_bytes = uploaded_file.read()
+
+        # Step 1: Convert PDF to images
+        with st.spinner("Converting PDF to images..."):
             try:
-                result = analyze_resume(resume_input, api_key)
+                images_data = convert_pdf_to_images(pdf_bytes)
+                st.info(f"Processed {len(images_data)} page(s)")
+            except Exception as e:
+                st.error(f"Error converting PDF: {str(e)}")
+                st.stop()
+
+        # Step 2: Quality Review with Gemini
+        with st.spinner("Performing resume quality review (Gemini 3)..."):
+            try:
+                quality_response = perform_quality_review(images_data)
+                if quality_response:
+                    quality_data = parse_quality_review(quality_response)
+                else:
+                    st.warning("Quality review failed - proceeding with default PASS")
+                    quality_data = {"verdict": "PASS", "total_score": 4, "summary": "Review unavailable"}
+            except Exception as e:
+                st.warning(f"Quality review error: {str(e)} - proceeding with default PASS")
+                quality_data = {"verdict": "PASS", "total_score": 4, "summary": "Review unavailable"}
+
+        # Display quality review result
+        st.markdown("---")
+        st.markdown("### Step 1: Resume Quality Review")
+
+        quality_verdict = quality_data.get('verdict', 'PASS')
+        if quality_verdict == "PASS":
+            st.success(f"Quality Review: **PASS** ({quality_data.get('total_score', 'N/A')}/4)")
+        else:
+            st.error(f"Quality Review: **FAIL** ({quality_data.get('total_score', 'N/A')}/4) - This will result in a -1 penalty to the final score")
+
+        with st.expander("View Quality Review Details"):
+            st.markdown(f"**Summary:** {quality_data.get('summary', 'N/A')}")
+
+            for criterion in ['spelling_grammar', 'factual_consistency', 'layout_structure', 'attention_to_detail']:
+                criterion_data = quality_data.get(criterion, {})
+                score = criterion_data.get('score', 'N/A')
+                issues = criterion_data.get('issues', [])
+
+                criterion_name = criterion.replace('_', ' ').title()
+                score_icon = "✅" if score == 1 else "❌"
+
+                st.markdown(f"**{criterion_name}:** {score_icon} ({score}/1)")
+                if issues and len(issues) > 0:
+                    for issue in issues:
+                        st.markdown(f"  - {issue}")
+
+        # Step 3: Extract text from resume
+        with st.spinner("Extracting resume content (Gemini 3)..."):
+            try:
+                resume_text = extract_resume_text(images_data)
+                if not resume_text:
+                    st.error("Failed to extract text from resume")
+                    st.stop()
+            except Exception as e:
+                st.error(f"Error extracting text: {str(e)}")
+                st.stop()
+
+        # Step 4: Analyze with GPT-5.2
+        with st.spinner("Analyzing resume against role criteria (GPT-5.2)..."):
+            try:
+                result = analyze_resume(resume_text, quality_data, api_key)
                 st.markdown("---")
-                st.markdown("## Analysis Result")
+                st.markdown("### Step 2: Role Fit Analysis")
                 st.markdown(result)
             except Exception as e:
                 st.error(f"Error analyzing resume: {str(e)}")
 
+# Footer
+st.markdown("---")
+st.caption("Resume screening powered by Gemini 3 (quality review & text extraction) and GPT-5.2 (role fit analysis)")
