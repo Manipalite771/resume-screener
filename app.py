@@ -549,6 +549,9 @@ if analyze_btn:
                     for issue in issues:
                         st.markdown(f"  - {issue}")
 
+        # Clear indicator that this is not the final verdict
+        st.warning("⚠️ **This is NOT the final verdict.** Quality review only affects scoring. The final PROCEED/DO NOT PROCEED decision is based on Role Fit Analysis below.")
+
         # Step 3: Extract text from resume
         with st.spinner("Extracting resume content (Gemini 3)..."):
             try:
