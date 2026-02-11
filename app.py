@@ -315,10 +315,10 @@ def call_gemini_with_images(images_data, prompt):
                 time.sleep(retry_delay * 2)
                 retry_delay *= 2
             else:
-                st.error(f"Gemini API Error {response.status_code}: {response.text[:200]}")
+                st.error(f"API Error {response.status_code}: {response.text[:200]}")
 
         except Exception as e:
-            st.error(f"Gemini API Exception: {str(e)}")
+            st.error(f"API Exception: {str(e)}")
 
         if attempt < max_retries - 1:
             import time
@@ -499,7 +499,7 @@ if analyze_btn:
                 st.stop()
 
         # Step 2: Quality Review with Gemini
-        with st.spinner("Performing resume quality review (Gemini 3)..."):
+        with st.spinner("Performing resume quality review..."):
             try:
                 quality_response = perform_quality_review(images_data)
                 if quality_response:
@@ -553,7 +553,7 @@ if analyze_btn:
         st.warning("⚠️ **This is NOT the final verdict.** Quality review only affects scoring. The final PROCEED/DO NOT PROCEED decision is based on Role Fit Analysis below.")
 
         # Step 3: Extract text from resume
-        with st.spinner("Extracting resume content (Gemini 3)..."):
+        with st.spinner("Extracting resume content..."):
             try:
                 resume_text = extract_resume_text(images_data)
                 if not resume_text:
@@ -564,7 +564,7 @@ if analyze_btn:
                 st.stop()
 
         # Step 4: Analyze with GPT-5.2
-        with st.spinner("Analyzing resume against role criteria (GPT-5.2)..."):
+        with st.spinner("Analyzing resume against role criteria..."):
             try:
                 result = analyze_resume(resume_text, quality_data, api_key)
 
@@ -604,4 +604,4 @@ if analyze_btn:
 
 # Footer
 st.markdown("---")
-st.caption("Resume screening powered by Gemini 3 (quality review & text extraction) and GPT-5.2 (role fit analysis)")
+st.caption("Resume screening powered by AI")
