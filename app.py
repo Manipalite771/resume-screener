@@ -567,9 +567,38 @@ if analyze_btn:
         with st.spinner("Analyzing resume against role criteria (GPT-5.2)..."):
             try:
                 result = analyze_resume(resume_text, quality_data, api_key)
+
+                # Extract verdict from result
+                import re
+                verdict_match = re.search(r'\*\*(PROCEED TO INTERVIEW|DO NOT PROCEED)\*\*', result)
+                final_verdict = verdict_match.group(1) if verdict_match else None
+
+                # Extract final score if present
+                score_match = re.search(r'\*\*Final Score:\s*(\d+)/4\*\*', result)
+                final_score = score_match.group(1) if score_match else None
+
                 st.markdown("---")
-                st.markdown("### Step 2: Role Fit Analysis")
-                st.markdown(result)
+
+                # Prominent verdict display
+                st.markdown("## Final Decision")
+
+                if final_verdict == "PROCEED TO INTERVIEW":
+                    st.success(f"""
+                    ## ✅ PROCEED TO INTERVIEW
+                    **Final Score: {final_score}/4** (minimum 3/4 required)
+                    """)
+                elif final_verdict == "DO NOT PROCEED":
+                    st.error(f"""
+                    ## ❌ DO NOT PROCEED
+                    **Final Score: {final_score}/4** (minimum 3/4 required)
+                    """)
+                else:
+                    st.warning("⚠️ Could not determine verdict - please review analysis below")
+
+                # Detailed analysis in expander
+                with st.expander("📋 View Detailed Analysis", expanded=False):
+                    st.markdown(result)
+
             except Exception as e:
                 st.error(f"Error analyzing resume: {str(e)}")
 
