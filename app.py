@@ -448,17 +448,17 @@ st.markdown("---")
 api_key = get_api_key()
 
 if not api_key:
-    st.warning("OpenAI API key not configured. Please enter your API key below.")
+    st.warning("Please enter your access key to continue.")
     api_key_input = st.text_input(
-        "OpenAI API Key",
+        "Access Key",
         type="password",
-        help="Enter your OpenAI API key"
+        help="Enter your access key"
     )
     if api_key_input:
         st.session_state.openai_api_key = api_key_input
         st.rerun()
 else:
-    st.success("API configured")
+    st.success("Ready to use")
 
 st.markdown("---")
 
@@ -484,7 +484,7 @@ if analyze_btn:
     if not uploaded_file:
         st.error("Please upload a PDF resume before analyzing.")
     elif not api_key:
-        st.error("Please configure your OpenAI API key first.")
+        st.error("Please enter your access key first.")
     else:
         # Read PDF bytes
         pdf_bytes = uploaded_file.read()
