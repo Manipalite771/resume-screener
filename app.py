@@ -21,49 +21,72 @@ GEMINI_MODEL = "gemini-3-pro-preview"
 GEMINI_API_KEY = "AIzaSyB-Z4ucSSHHUynsx5Ecg1qu6k96-XUbSIQ"
 
 # Resume Quality Review Prompt (Gemini)
-QUALITY_REVIEW_PROMPT = """You are a professional resume quality reviewer. Analyze the provided resume image(s) and evaluate the document quality based on the following criteria:
+QUALITY_REVIEW_PROMPT = """You are a professional resume quality reviewer. Analyze the provided resume image(s) and evaluate the document quality.
+
+## IMPORTANT CONTEXT
+- Current date: February 2026. Dates up to 2026 are valid and acceptable.
+- First, check if this is an AGENCY CV (look for agency name/logo at the top like "ABC Staffing", "XYZ Recruiters", etc.) or a DIRECT CANDIDATE CV.
+
+## CV Source Detection
+- **Agency CV**: Has agency branding/name at top, often missing candidate contact details (this is intentional - agencies remove contact info to prevent direct outreach)
+- **Direct CV**: No agency branding, should have candidate's own contact information
 
 ## Evaluation Criteria
 
-1. **Spelling & Grammar** (0 or 1)
-   - Check for spelling mistakes, typos, grammatical errors
-   - Look for inconsistent capitalization, punctuation errors
+### 1. **Spelling & Grammar** (0 or 1)
+- Check for spelling mistakes, typos, grammatical errors
+- Minor capitalization inconsistencies (e.g., "Zero-shot" vs "zero-shot") should NOT fail this criterion
+- Focus on actual language errors, not stylistic choices
 
-2. **Factual Consistency** (0 or 1)
-   - Check if dates are logical and consistent (no overlapping employment periods)
-   - Verify education timeline makes sense (graduation year vs experience)
-   - Check for inconsistent job titles/company names
+### 2. **Factual/Technical Consistency** (0 or 1)
+- Check if dates are logical (no overlapping employment, dates should be <= 2026)
+- Unexplained employment gaps > 1 year should be noted
+- **IMPORTANT**: Check for technical inaccuracies in claims, e.g.:
+  - Claiming PostgreSQL as a vector database (it's not, unless using pgvector extension)
+  - Misrepresenting technologies or their capabilities
+  - Inconsistent tech stack claims (e.g., using a framework that didn't exist at the claimed time)
+- Verify education timeline makes sense relative to experience
 
-3. **Layout & Structure** (0 or 1)
-   - Is the resume well-organized with clear sections?
-   - Consistent formatting (fonts, bullet styles, spacing)
-   - Professional appearance, not cluttered or chaotic
+### 3. **Layout & Structure** (0 or 1)
+- Is the resume well-organized with clear sections?
+- Professional appearance, not cluttered or chaotic
+- **DO NOT penalize** for:
+  - Minor bullet point style variations (solid vs hollow)
+  - Slight spacing inconsistencies
+  - These may be artifacts from agency reformatting, not candidate's fault
 
-4. **Attention to Detail** (0 or 1)
-   - Consistent date formats throughout
-   - Proper use of bullet points and indentation
-   - No broken formatting, misaligned text, or visual artifacts
-   - Contact information is complete and properly formatted
+### 4. **Attention to Detail** (0 or 1)
+- **For Agency CVs**:
+  - Missing contact info is EXPECTED and should NOT be penalized
+  - Focus on content quality, not formatting issues that agency may have introduced
+- **For Direct Candidate CVs**:
+  - Missing contact information IS a valid concern
+  - Consistent date formats expected
+- For both: Focus on quality of work descriptions, clarity of achievements, and professional presentation of experience
 
 ## Output Format
 
 Provide your analysis in EXACTLY this JSON format (no other text):
 ```json
 {
-  "spelling_grammar": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
-  "factual_consistency": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
-  "layout_structure": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
-  "attention_to_detail": {"score": 0 or 1, "issues": ["list of issues found or empty"]},
+  "cv_source": "AGENCY" or "DIRECT",
+  "agency_name": "Name if agency CV, otherwise null",
+  "spelling_grammar": {"score": 0 or 1, "issues": ["list of significant issues only"]},
+  "factual_consistency": {"score": 0 or 1, "issues": ["list of factual/technical errors"]},
+  "layout_structure": {"score": 0 or 1, "issues": ["list of major structural issues only"]},
+  "attention_to_detail": {"score": 0 or 1, "issues": ["list of significant issues based on CV source"]},
   "total_score": X,
   "verdict": "PASS" or "FAIL",
   "summary": "Brief 1-2 sentence summary"
 }
 ```
 
-**IMPORTANT**:
+**SCORING RULES**:
 - Total score = sum of all four criteria (max 4)
 - PASS if total_score >= 3, otherwise FAIL
-- Be strict but fair - minor issues can be noted but shouldn't fail a criterion unless significant
+- Be lenient on formatting/style issues - focus on SUBSTANCE
+- Technical inaccuracies and factual errors are more important than formatting
+- Agency CVs should be judged primarily on content quality, not presentation
 """
 
 # Role Screening Prompt (GPT-5.2)
@@ -350,6 +373,8 @@ def parse_quality_review(quality_response):
         st.warning(f"Could not parse quality review response: {e}")
         # Return default PASS if parsing fails
         return {
+            "cv_source": "UNKNOWN",
+            "agency_name": None,
             "total_score": 4,
             "verdict": "PASS",
             "summary": "Quality review parsing failed - defaulting to PASS",
@@ -368,11 +393,17 @@ def analyze_resume(resume_text: str, quality_data: dict, api_key: str) -> str:
     quality_verdict = quality_data.get('verdict', 'PASS')
     penalty = "-1" if quality_verdict == "FAIL" else "0"
 
+    # Get CV source info
+    cv_source = quality_data.get('cv_source', 'UNKNOWN')
+    agency_name = quality_data.get('agency_name')
+    cv_source_text = f"Agency CV ({agency_name})" if cv_source == "AGENCY" and agency_name else cv_source
+
     # Build quality summary
     quality_summary = f"""
+**CV Source: {cv_source_text}**
 **Quality Verdict: {quality_verdict}**
 - Spelling & Grammar: {quality_data.get('spelling_grammar', {}).get('score', 'N/A')}/1
-- Factual Consistency: {quality_data.get('factual_consistency', {}).get('score', 'N/A')}/1
+- Factual/Technical Consistency: {quality_data.get('factual_consistency', {}).get('score', 'N/A')}/1
 - Layout & Structure: {quality_data.get('layout_structure', {}).get('score', 'N/A')}/1
 - Attention to Detail: {quality_data.get('attention_to_detail', {}).get('score', 'N/A')}/1
 - Quality Score: {quality_data.get('total_score', 'N/A')}/4
@@ -382,6 +413,7 @@ def analyze_resume(resume_text: str, quality_data: dict, api_key: str) -> str:
     # Build quality review context for GPT
     quality_review_context = f"""
 The resume has undergone a quality review with the following results:
+- CV Source: {cv_source_text}
 - Verdict: {quality_verdict}
 - Quality Score: {quality_data.get('total_score', 'N/A')}/4
 - Issues Found: {quality_data.get('summary', 'None noted')}
@@ -482,6 +514,18 @@ if analyze_btn:
         # Display quality review result
         st.markdown("---")
         st.markdown("### Step 1: Resume Quality Review")
+
+        # Show CV source
+        cv_source = quality_data.get('cv_source', 'UNKNOWN')
+        agency_name = quality_data.get('agency_name')
+
+        if cv_source == "AGENCY":
+            source_text = f"Agency CV"
+            if agency_name:
+                source_text += f" ({agency_name})"
+            st.info(f"📋 **CV Source:** {source_text} - Formatting leniency applied")
+        else:
+            st.info(f"📋 **CV Source:** Direct Candidate CV")
 
         quality_verdict = quality_data.get('verdict', 'PASS')
         if quality_verdict == "PASS":
