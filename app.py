@@ -18,7 +18,7 @@ st.set_page_config(
 # Model configuration
 OPENAI_MODEL = "gpt-5.2"
 GEMINI_MODEL = "gemini-3-pro-preview"
-GEMINI_API_KEY = "AIzaSyB-Z4ucSSHHUynsx5Ecg1qu6k96-XUbSIQ"
+GEMINI_API_KEY = "AIzaSyAM8NOe1qAEMAdycMRoEA9gZsnfTu-8KUE"
 
 # Role configurations
 ROLES = {
