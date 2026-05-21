@@ -20,6 +20,18 @@ OPENAI_MODEL = "gpt-5.2"
 GEMINI_MODEL = "gemini-3-pro-preview"
 GEMINI_API_KEY = "AIzaSyB-Z4ucSSHHUynsx5Ecg1qu6k96-XUbSIQ"
 
+# Role configurations
+ROLES = {
+    "GenAI Delivery Lead": {
+        "title": "GenAI Productization & Delivery Lead (Life Sciences)",
+        "subtitle": "GenAI Productization & Delivery Lead (Life Sciences)"
+    },
+    "Lead Business Analyst": {
+        "title": "Lead Business Analyst - DT Consulting (Life Sciences)",
+        "subtitle": "Lead Business Analyst - DT Consulting (Life Sciences)"
+    }
+}
+
 # Resume Quality Review Prompt (Gemini)
 QUALITY_REVIEW_PROMPT = """You are a professional resume quality reviewer. Analyze the provided resume image(s) and evaluate the document quality.
 
@@ -222,6 +234,139 @@ Provide your analysis in the following format:
 2-3 sentence summary of your recommendation.
 """
 
+# Business Analyst Screening Prompt (GPT-5.2)
+BA_SCREENING_PROMPT = """# Task
+
+Review the provided resume against the Guidance provided and basis that recommend if we should proceed with the first round of interview or not
+
+# Guidance
+
+The core problem to solve
+We are hiring for a Lead Business Analyst who can lead teams of analysts, drive client engagement, deliver data-driven consulting solutions, and bridge client business challenges with DT Consulting's solution suite in life sciences.
+Think: "Consulting BA Lead / Analytics Delivery Manager / Client Solutions Lead" — not "Data Engineer" or "Software Developer".
+________________________________________
+Role archetype
+•    Lead Business Analyst – DT Consulting
+•    Senior Consulting Analyst – Life Sciences
+•    Analytics & Insights Delivery Lead
+Avoid: "Data Engineer", "Software Developer", "ML Engineer" (these attract the wrong pipeline).
+________________________________________
+What success looks like:
+This person should be able to:
+1.    Lead and mentor teams of 5-10 analysts → define scopes, manage workflows, enforce quality
+2.    Lead client discussions → present insights, offer data-backed recommendations, strengthen relationships
+3.    Oversee complex data analysis → quantitative/qualitative research, dashboards, reporting frameworks
+4.    Drive strategic direction → digital transformation, CX initiatives, solution innovation
+________________________________________
+Must-have skills (non-negotiable)
+1) Team & Project Leadership
+•    Proven track record of leading analyst teams (5+ people)
+•    Experience defining project scopes, objectives, deliverables
+•    Workflow management, resource allocation, quality oversight
+•    Mentoring and developing junior analysts
+2) Client & Stakeholder Engagement
+•    Has led client-facing discussions and presentations
+•    Experience as liaison between offshore and onshore teams
+•    Can translate business problems into analytical approaches
+•    Strong executive communication skills
+3) Data Analysis & Analytics Expertise
+•    Advanced Excel modeling, SQL, and at least one BI tool (Power BI, Tableau)
+•    Experience with quantitative research and qualitative analysis
+•    Can design dashboards, reporting frameworks, and analytics solutions
+•    Python or equivalent scripting is a plus
+4) Consulting / Life Sciences Domain
+•    Experience in consulting, digital transformation, or professional services
+•    Life sciences / pharma / healthcare industry exposure preferred
+•    Understands regulated environments and compliance considerations
+________________________________________
+Good-to-have skills (strong signals)
+•    CX/UX strategy experience
+•    Process optimization and operational excellence
+•    Risk management frameworks
+•    Cross-border / global team collaboration
+•    Master's degree in Business, Data Science, or Analytics
+________________________________________
+What we do not need
+•    Not looking for pure software developers or data engineers as the primary fit.
+•    Not looking for junior analysts with no leadership experience.
+•    Not looking for academic researchers without client-facing delivery experience.
+•    Not looking for profiles with only operational/support roles and no analytical depth.
+(We already have engineering; we need analytical leaders who can drive consulting delivery.)
+________________________________________
+Ideal background
+Education
+•    MBA, M.S. in Analytics/Data Science, or Bachelor's in Business/STEM with strong consulting experience
+•    Degrees matter less than proof of leading teams + delivering client solutions
+Experience
+•    7+ years overall in business analysis, consulting, data analytics, or digital transformation
+•    Worked as one of:
+o    Lead/Senior Business Analyst
+o    Consulting Manager / Engagement Manager
+o    Analytics Lead / Insights Manager
+o    Digital transformation lead
+o    Solutions Consultant with analytics depth
+Industries to source from:
+•    Life sciences services (Indegene-like)
+•    Management consulting (Big 4, boutique)
+•    Health-tech / Pharma services
+•    Enterprise analytics / BI consulting
+________________________________________
+Screening keywords for TAG
+Target keywords:
+Business analysis, consulting, team leadership, client engagement, data analytics, Power BI, Tableau, SQL, Python, Excel modeling, digital transformation, CX/UX, life sciences, pharma, healthcare, project management, stakeholder management, dashboards, reporting, insights, quantitative research, qualitative analysis, offshore-onshore coordination.
+Reject / deprioritize keywords (unless paired with consulting/leadership experience):
+Pure coding, ML model training, DevOps, infrastructure, "built microservices", frontend development, Kaggle, academic research only.
+________________________________________
+Quick scorecard TAG can use (simple)
+•    Team & Project Leadership – 0/1
+•    Client/Stakeholder Engagement – 0/1
+•    Data Analysis & Analytics Expertise – 0/1
+•    Consulting / Life Sciences Domain – 0/1
+
+Hire pipeline: only shortlist candidates with 3/4+.
+
+# Quality Review Result
+
+{quality_review}
+
+# Resume
+
+{resume}
+
+# Output Format
+
+Provide your analysis in the following format:
+
+## Resume Quality Review
+{quality_summary}
+
+## Role Fit Scorecard
+| Criteria | Score | Evidence |
+|----------|-------|----------|
+| Team & Project Leadership | 0 or 1 | Brief evidence from resume |
+| Client/Stakeholder Engagement | 0 or 1 | Brief evidence from resume |
+| Data Analysis & Analytics Expertise | 0 or 1 | Brief evidence from resume |
+| Consulting / Life Sciences Domain | 0 or 1 | Brief evidence from resume |
+
+**Role Fit Score: X/4**
+**Quality Penalty: {penalty}**
+**Final Score: X/4**
+
+## Verdict
+**PROCEED TO INTERVIEW** or **DO NOT PROCEED**
+
+(Note: Candidates need final score of 3/4+ to proceed. Quality review FAIL results in -1 penalty.)
+
+## Key Strengths
+- Bullet points of relevant strengths
+
+## Concerns / Gaps
+- Bullet points of concerns or missing qualifications
+
+## Summary
+2-3 sentence summary of your recommendation.
+"""
+
 
 def get_api_key():
     """Get OpenAI API key from secrets or session state."""
@@ -385,7 +530,7 @@ def parse_quality_review(quality_response):
         }
 
 
-def analyze_resume(resume_text: str, quality_data: dict, api_key: str) -> str:
+def analyze_resume(resume_text: str, quality_data: dict, api_key: str, selected_role: str) -> str:
     """Send resume to GPT-5.2 for analysis with quality review context."""
     client = OpenAI(api_key=api_key)
 
@@ -421,7 +566,13 @@ The resume has undergone a quality review with the following results:
 {'IMPORTANT: Since quality review FAILED, apply a -1 penalty to the final score.' if quality_verdict == 'FAIL' else 'Quality review passed - no penalty applied.'}
 """
 
-    prompt = SCREENING_PROMPT.format(
+    # Select the appropriate screening prompt based on role
+    if selected_role == "Lead Business Analyst":
+        screening_prompt = BA_SCREENING_PROMPT
+    else:
+        screening_prompt = SCREENING_PROMPT
+
+    prompt = screening_prompt.format(
         resume=resume_text,
         quality_review=quality_review_context,
         quality_summary=quality_summary,
@@ -440,7 +591,15 @@ The resume has undergone a quality review with the following results:
 
 # Main UI
 st.title("Resume Screener")
-st.subheader("GenAI Productization & Delivery Lead (Life Sciences)")
+
+# Role selection
+selected_role = st.selectbox(
+    "Select Role",
+    options=list(ROLES.keys()),
+    help="Choose the role to screen the candidate against"
+)
+
+st.subheader(ROLES[selected_role]["subtitle"])
 
 st.markdown("---")
 
@@ -566,7 +725,7 @@ if analyze_btn:
         # Step 4: Analyze with GPT-5.2
         with st.spinner("Analyzing resume against role criteria..."):
             try:
-                result = analyze_resume(resume_text, quality_data, api_key)
+                result = analyze_resume(resume_text, quality_data, api_key, selected_role)
 
                 # Extract verdict from result
                 import re
