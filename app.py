@@ -2,7 +2,6 @@ import streamlit as st
 from openai import OpenAI
 import fitz  # PyMuPDF
 import base64
-import requests
 import tempfile
 import os
 from PIL import Image
@@ -17,8 +16,6 @@ st.set_page_config(
 
 # Model configuration
 OPENAI_MODEL = "gpt-5.2"
-GEMINI_MODEL = "gemini-3-pro-preview"
-GEMINI_API_KEY = "AIzaSyAM8NOe1qAEMAdycMRoEA9gZsnfTu-8KUE"
 
 # Role configurations
 ROLES = {
@@ -32,7 +29,7 @@ ROLES = {
     }
 }
 
-# Resume Quality Review Prompt (Gemini)
+# Resume Quality Review Prompt (GPT-5.2)
 QUALITY_REVIEW_PROMPT = """You are a professional resume quality reviewer. Analyze the provided resume image(s) and evaluate the document quality.
 
 ## IMPORTANT CONTEXT
@@ -413,68 +410,51 @@ def convert_pdf_to_images(pdf_bytes):
     return images_data
 
 
-def call_gemini_with_images(images_data, prompt):
-    """Call Gemini API with images for text extraction or quality review."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+def call_openai_with_images(images_data, prompt, api_key):
+    """Call OpenAI GPT-5.2 with images for text extraction or quality review."""
+    client = OpenAI(api_key=api_key)
 
-    parts = [{"text": prompt}]
+    content = [{"type": "text", "text": prompt}]
 
     for img in images_data:
-        parts.append({
-            "inline_data": {
-                "mime_type": img['mime_type'],
-                "data": img['data']
+        content.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{img['mime_type']};base64,{img['data']}"
             }
         })
-
-    payload = {
-        "contents": [{
-            "parts": parts
-        }],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 32000
-        }
-    }
-
-    headers = {"Content-Type": "application/json"}
 
     max_retries = 3
     retry_delay = 5
 
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, headers=headers, json=payload, verify=False, timeout=180)
-
-            if response.status_code == 200:
-                result = response.json()
-                if 'candidates' in result and len(result['candidates']) > 0:
-                    candidate = result['candidates'][0]
-                    if 'content' in candidate and 'parts' in candidate['content']:
-                        parts_result = candidate['content']['parts']
-                        if len(parts_result) > 0 and 'text' in parts_result[0]:
-                            return parts_result[0]['text']
-                return None
-            elif response.status_code == 429:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[{"role": "user", "content": content}],
+                temperature=0.1,
+                max_tokens=32000
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if "rate_limit" in str(e).lower() or "429" in str(e):
                 import time
                 time.sleep(retry_delay * 2)
                 retry_delay *= 2
             else:
-                st.error(f"API Error {response.status_code}: {response.text[:200]}")
-
-        except Exception as e:
-            st.error(f"API Exception: {str(e)}")
-
-        if attempt < max_retries - 1:
-            import time
-            time.sleep(retry_delay)
-            retry_delay *= 2
+                st.error(f"API Exception: {str(e)}")
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    return None
 
     return None
 
 
-def extract_resume_text(images_data):
-    """Extract text from resume images using Gemini."""
+def extract_resume_text(images_data, api_key):
+    """Extract text from resume images using GPT-5.2."""
     extraction_prompt = """Extract ALL text content from this resume image(s).
 
 IMPORTANT:
@@ -486,12 +466,12 @@ IMPORTANT:
 
 Output the complete resume text in a clean, readable format."""
 
-    return call_gemini_with_images(images_data, extraction_prompt)
+    return call_openai_with_images(images_data, extraction_prompt, api_key)
 
 
-def perform_quality_review(images_data):
-    """Perform quality review on resume images using Gemini."""
-    return call_gemini_with_images(images_data, QUALITY_REVIEW_PROMPT)
+def perform_quality_review(images_data, api_key):
+    """Perform quality review on resume images using GPT-5.2."""
+    return call_openai_with_images(images_data, QUALITY_REVIEW_PROMPT, api_key)
 
 
 def parse_quality_review(quality_response):
@@ -657,10 +637,10 @@ if analyze_btn:
                 st.error(f"Error converting PDF: {str(e)}")
                 st.stop()
 
-        # Step 2: Quality Review with Gemini
+        # Step 2: Quality Review
         with st.spinner("Performing resume quality review..."):
             try:
-                quality_response = perform_quality_review(images_data)
+                quality_response = perform_quality_review(images_data, api_key)
                 if quality_response:
                     quality_data = parse_quality_review(quality_response)
                 else:
@@ -714,7 +694,7 @@ if analyze_btn:
         # Step 3: Extract text from resume
         with st.spinner("Extracting resume content..."):
             try:
-                resume_text = extract_resume_text(images_data)
+                resume_text = extract_resume_text(images_data, api_key)
                 if not resume_text:
                     st.error("Failed to extract text from resume")
                     st.stop()
