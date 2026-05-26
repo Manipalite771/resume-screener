@@ -433,7 +433,7 @@ def call_openai_with_images(images_data, prompt, api_key):
                 model=OPENAI_MODEL,
                 messages=[{"role": "user", "content": content}],
                 temperature=0.1,
-                max_tokens=32000
+                max_completion_tokens=32000
             )
             return response.choices[0].message.content
         except Exception as e:
