@@ -26,6 +26,10 @@ ROLES = {
     "Lead Business Analyst": {
         "title": "Lead Business Analyst - DT Consulting (Life Sciences)",
         "subtitle": "Lead Business Analyst - DT Consulting (Life Sciences)"
+    },
+    "Agentforce Engineer": {
+        "title": "Agentforce Engineer - Salesforce AI Solutions",
+        "subtitle": "Agentforce Engineer - Salesforce AI Solutions"
     }
 }
 
@@ -365,6 +369,142 @@ Provide your analysis in the following format:
 """
 
 
+# Agentforce Engineer Screening Prompt (GPT-5.2)
+AGENTFORCE_SCREENING_PROMPT = """# Task
+
+Review the provided resume against the Guidance provided and basis that recommend if we should proceed with the first round of interview or not
+
+# Guidance
+
+The core problem to solve
+We are hiring for an Agentforce Engineer who can lead the technical delivery of Salesforce Agentforce AI solutions, design and build agentic implementations, integrate Data Cloud with diverse technologies, and manage technical teams across onshore and offshore.
+Think: "Salesforce AI Solutions Architect / Agentforce Technical Lead / Data Cloud Integration Engineer" — not "Generic Developer" or "Junior Salesforce Admin".
+________________________________________
+Role archetype
+•    Agentforce Engineer – Salesforce AI Solutions
+•    Salesforce AI & Data Cloud Technical Lead
+•    Agentforce Implementation Architect
+Avoid: "Junior Salesforce Admin", "Generic Full-Stack Developer", "Marketing Operations Analyst" (these attract the wrong pipeline).
+________________________________________
+What success looks like:
+This person should be able to:
+1.    Design and build AI agents in Agentforce → leveraging the full Salesforce technology stack
+2.    Lead Data Cloud integrations → data modeling, architecture, cross-product data mapping, connectors
+3.    Drive technical delivery → manage onshore/offshore teams, run PoCs, facilitate client workshops
+4.    Architect scalable solutions → across multiple Salesforce Clouds with security and performance best practices
+________________________________________
+Must-have skills (non-negotiable)
+1) Salesforce Ecosystem Expertise (3+ years)
+•    Deep hands-on experience with Salesforce Marketing Cloud (SFMC), Data Cloud (CDP), Agentforce, Experience Cloud
+•    Strong MarTech architecture knowledge: data modeling, profile unification, segmentation, audience management
+•    Automation & orchestration across SFMC and Data Cloud
+•    Configuring inbound and outbound data connectors
+2) Agentforce / AI Agent Development
+•    Hands-on experience developing AI agents in Agentforce or other agentic/AI platforms
+•    Understanding of agentic design patterns, prompt engineering, and AI solution architecture
+•    Ability to lead Agentic Proof of Concept (PoC) projects
+3) Salesforce Development & Integration
+•    Strong APEX and Lightning Web Components (LWC) development
+•    Integration patterns: REST/SOAP APIs, MuleSoft or equivalent middleware
+•    Salesforce security, identity, and access control best practices
+•    Designing scalable, high-performance solutions across multiple Salesforce Clouds
+4) Technical Leadership & Client Engagement
+•    Experience managing technical project teams (onshore and offshore)
+•    Facilitating workshops and engaging with clients on configuration vs. coding trade-offs
+•    Data profiling, data governance frameworks, and standardization protocols
+•    Proven ability to identify data gaps and propose implementation strategies
+________________________________________
+Good-to-have skills (strong signals)
+•    Prior experience in Pharma/Life Sciences sectors
+•    Custom API development for integrations between CDP and source systems
+•    Strong SQL and Python knowledge
+•    Exposure to cloud platforms (Snowflake, AWS) in marketing or data use cases
+•    Salesforce certifications (Administrator, Data Cloud Consultant, Agentforce Specialist)
+•    Experience integrating with AWS Pinpoint, Oracle Cloud, or similar platforms
+________________________________________
+What we do not need
+•    Not looking for junior Salesforce administrators with only point-and-click configuration experience.
+•    Not looking for generic full-stack developers with no Salesforce ecosystem expertise.
+•    Not looking for marketing operations analysts without technical depth.
+•    Not looking for pure data scientists or ML researchers without platform implementation experience.
+(We need someone who can architect and build Agentforce solutions end-to-end with deep Salesforce platform knowledge.)
+________________________________________
+Ideal background
+Education
+•    B.Tech/B.E. in Computer Science or related field, MCA, or equivalent technical degree
+•    Salesforce certifications are a strong signal (Administrator, Data Cloud Consultant, Agentforce Specialist)
+•    Degrees matter less than proof of building + delivering Salesforce AI solutions
+Experience
+•    6–8 years overall, with minimum 3+ years in the Salesforce ecosystem
+•    Worked as one of:
+o    Salesforce Technical Lead / Architect
+o    Agentforce / Data Cloud Implementation Lead
+o    Salesforce Solutions Engineer
+o    MarTech Platform Engineer (Salesforce-focused)
+o    CRM Technical Consultant with AI/Data Cloud focus
+Industries to source from:
+•    Salesforce consulting partners (Deloitte Digital, Accenture, Cognizant, etc.)
+•    Life sciences / pharma services with Salesforce implementations
+•    MarTech / CRM platform companies
+•    Enterprise SaaS with Salesforce integration depth
+________________________________________
+Screening keywords for TAG
+Target keywords:
+Agentforce, Data Cloud, CDP, Salesforce Marketing Cloud, SFMC, Experience Cloud, APEX, LWC, Lightning Web Components, MuleSoft, REST API, SOAP API, data modeling, profile unification, segmentation, audience management, AI agents, agentic, PoC, data connectors, data governance, Salesforce architecture, multi-cloud, integration patterns, onshore-offshore, technical delivery.
+Reject / deprioritize keywords (unless paired with Salesforce delivery experience):
+Junior admin, only Trailhead badges, no hands-on APEX, pure marketing ops, "configured reports only", no coding experience, academic AI research only.
+________________________________________
+Quick scorecard TAG can use (simple)
+•    Salesforce Ecosystem Expertise (SFMC/Data Cloud/Agentforce) – 0/1
+•    Agentforce / AI Agent Development – 0/1
+•    Salesforce Development & Integration (APEX/LWC/APIs) – 0/1
+•    Technical Leadership & Client Engagement – 0/1
+
+Hire pipeline: only shortlist candidates with 3/4+.
+
+# Quality Review Result
+
+{quality_review}
+
+# Resume
+
+{resume}
+
+# Output Format
+
+Provide your analysis in the following format:
+
+## Resume Quality Review
+{quality_summary}
+
+## Role Fit Scorecard
+| Criteria | Score | Evidence |
+|----------|-------|----------|
+| Salesforce Ecosystem Expertise (SFMC/Data Cloud/Agentforce) | 0 or 1 | Brief evidence from resume |
+| Agentforce / AI Agent Development | 0 or 1 | Brief evidence from resume |
+| Salesforce Development & Integration (APEX/LWC/APIs) | 0 or 1 | Brief evidence from resume |
+| Technical Leadership & Client Engagement | 0 or 1 | Brief evidence from resume |
+
+**Role Fit Score: X/4**
+**Quality Penalty: {penalty}**
+**Final Score: X/4**
+
+## Verdict
+**PROCEED TO INTERVIEW** or **DO NOT PROCEED**
+
+(Note: Candidates need final score of 3/4+ to proceed. Quality review FAIL results in -1 penalty.)
+
+## Key Strengths
+- Bullet points of relevant strengths
+
+## Concerns / Gaps
+- Bullet points of concerns or missing qualifications
+
+## Summary
+2-3 sentence summary of your recommendation.
+"""
+
+
 def get_api_key():
     """Get OpenAI API key from secrets or session state."""
     api_key = None
@@ -549,6 +689,8 @@ The resume has undergone a quality review with the following results:
     # Select the appropriate screening prompt based on role
     if selected_role == "Lead Business Analyst":
         screening_prompt = BA_SCREENING_PROMPT
+    elif selected_role == "Agentforce Engineer":
+        screening_prompt = AGENTFORCE_SCREENING_PROMPT
     else:
         screening_prompt = SCREENING_PROMPT
 
