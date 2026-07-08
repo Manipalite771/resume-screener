@@ -1,0 +1,10 @@
+# Secrets — never commit real keys (repo is public)
+.streamlit/secrets.toml
+
+# Local tokens
+realfast mcp token.txt
+
+# Python
+venv/
+__pycache__/
+*.pyc

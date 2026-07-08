@@ -1,9 +1,10 @@
 import streamlit as st
-from openai import OpenAI
+import requests
 import fitz  # PyMuPDF
 import base64
 import tempfile
 import os
+import time
 from PIL import Image
 import io
 
@@ -14,8 +15,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Model configuration
-OPENAI_MODEL = "gpt-5.2"
+# Model configuration (Claude on Azure via the Anthropic Messages protocol)
+AZURE_ENDPOINT = "https://ai-tanmaytiwari0064ai791136586692.openai.azure.com/"
+AZURE_API_VERSION = "2024-10-21"
+ANTHROPIC_VERSION = "2023-06-01"
+CLAUDE_MODEL = "claude-opus-4-6"
 
 # Role configurations
 ROLES = {
@@ -506,13 +510,15 @@ Provide your analysis in the following format:
 
 
 def get_api_key():
-    """Get OpenAI API key from secrets or session state."""
+    """Get the Azure OpenAI access key from secrets or session state."""
     api_key = None
 
     # Try to get from Streamlit secrets first (for deployment)
     try:
-        if "OPENAI_API_KEY" in st.secrets:
-            api_key = st.secrets["OPENAI_API_KEY"]
+        for secret_name in ("AZURE_OPENAI_KEY", "OPENAI_API_KEY"):
+            if secret_name in st.secrets:
+                api_key = st.secrets[secret_name]
+                break
     except Exception:
         pass
 
@@ -550,47 +556,85 @@ def convert_pdf_to_images(pdf_bytes):
     return images_data
 
 
-def call_openai_with_images(images_data, prompt, api_key):
-    """Call OpenAI GPT-5.2 with images for text extraction or quality review."""
-    client = OpenAI(api_key=api_key)
+def _anthropic_messages(content, api_key, max_tokens=32000):
+    """POST a message to Claude on Azure (Anthropic Messages protocol).
 
-    content = [{"type": "text", "text": prompt}]
-
-    for img in images_data:
-        content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:{img['mime_type']};base64,{img['data']}"
-            }
-        })
+    Returns the assistant text, or None on failure. Retries only on
+    transient errors (rate limits / 5xx); permanent errors like invalid
+    key or exhausted quota fail fast with a clear message instead of
+    burning ~70s in a doomed backoff loop.
+    """
+    url = f"{AZURE_ENDPOINT}anthropic/v1/messages?api-version={AZURE_API_VERSION}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "anthropic-version": ANTHROPIC_VERSION,
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+        "messages": [{"role": "user", "content": content}],
+    }
 
     max_retries = 3
     retry_delay = 5
 
     for attempt in range(max_retries):
         try:
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[{"role": "user", "content": content}],
-                temperature=0.1,
-                max_completion_tokens=32000
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            if "rate_limit" in str(e).lower() or "429" in str(e):
-                import time
-                time.sleep(retry_delay * 2)
+            resp = requests.post(url, headers=headers, json=body, timeout=180)
+        except requests.RequestException as e:
+            # Network-level error: transient, worth a retry
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
                 retry_delay *= 2
-            else:
-                st.error(f"API Exception: {str(e)}")
-                if attempt < max_retries - 1:
-                    import time
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                else:
-                    return None
+                continue
+            st.error(f"Network error contacting the model service: {e}")
+            return None
+
+        if resp.status_code == 200:
+            data = resp.json()
+            parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
+            return "".join(parts)
+
+        # Non-200: decide whether it's worth retrying
+        detail = resp.text[:500]
+        transient = resp.status_code == 429 or resp.status_code >= 500
+        permanent = resp.status_code in (401, 403)
+
+        if permanent:
+            st.error(
+                f"Access denied ({resp.status_code}). The access key is invalid or its "
+                f"subscription/quota is inactive — retrying will not help. Details: {detail}"
+            )
+            return None
+
+        if transient and attempt < max_retries - 1:
+            time.sleep(retry_delay)
+            retry_delay *= 2
+            continue
+
+        st.error(f"Model service error ({resp.status_code}): {detail}")
+        return None
 
     return None
+
+
+def call_openai_with_images(images_data, prompt, api_key):
+    """Call Claude (Opus 4.6) with images for text extraction or quality review."""
+    content = [{"type": "text", "text": prompt}]
+
+    for img in images_data:
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": img["mime_type"],
+                "data": img["data"],
+            },
+        })
+
+    return _anthropic_messages(content, api_key, max_tokens=32000)
 
 
 def extract_resume_text(images_data, api_key):
@@ -651,9 +695,7 @@ def parse_quality_review(quality_response):
 
 
 def analyze_resume(resume_text: str, quality_data: dict, api_key: str, selected_role: str) -> str:
-    """Send resume to GPT-5.2 for analysis with quality review context."""
-    client = OpenAI(api_key=api_key)
-
+    """Send resume to Claude for role-fit analysis with quality review context."""
     # Determine penalty
     quality_verdict = quality_data.get('verdict', 'PASS')
     penalty = "-1" if quality_verdict == "FAIL" else "0"
@@ -701,14 +743,9 @@ The resume has undergone a quality review with the following results:
         penalty=penalty
     )
 
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
+    return _anthropic_messages(
+        [{"type": "text", "text": prompt}], api_key, max_tokens=32000
     )
-
-    return response.choices[0].message.content
 
 
 # Main UI
@@ -844,10 +881,13 @@ if analyze_btn:
                 st.error(f"Error extracting text: {str(e)}")
                 st.stop()
 
-        # Step 4: Analyze with GPT-5.2
+        # Step 4: Analyze with Claude
         with st.spinner("Analyzing resume against role criteria..."):
             try:
                 result = analyze_resume(resume_text, quality_data, api_key, selected_role)
+                if not result:
+                    st.error("Failed to analyze resume against role criteria")
+                    st.stop()
 
                 # Extract verdict from result
                 import re
