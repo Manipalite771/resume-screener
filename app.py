@@ -196,6 +196,57 @@ Quick scorecard TAG can use (simple)
 •    Regulated / healthcare familiarity – 0/1
 
 Hire pipeline: only shortlist candidates with 3/4+.
+________________________________________
+Full Job Description (for additional context)
+
+Role Overview:
+We are looking for a Lead - Gen AI resource to join Indegene's dynamic Gen AI Technology team. This role is ideal for individuals passionate about harnessing Generative AI to revolutionize processes and business problems in the pharmaceutical and healthcare industries.
+
+The ideal candidate will bring a unique blend of creativity, problem-solving, and learnability, combined with an ability to bridge the gap between technical solutions and real-world business challenges. They will work in a fast-paced, start-up-like environment, collaborating with engineering, UX, and customer teams to deliver impactful GenAI solutions. Joining a team that has successfully delivered multiple GenAI solutions to production working alongside top global life sciences organizations, you will have the opportunity to innovate, influence technology strategy, and drive meaningful transformation.
+
+Key Responsibilities:
+
+1. 'Voice of the client'
+•    Collaborate with customers and stakeholders to deeply understand specific business challenges and requirements across pharmaceutical and healthcare domains.
+•    Architect GenAI solutions for client needs and business problems.
+•    Act as a bridge between customers, internal teams, and engineers, ensuring solutions align with business goals and user needs.
+
+2. Generative AI Strategy
+•    Develop and implement cutting-edge GenAI strategies such as agentic workflows, RAG pipelines, tool/function calling, etc. tailored to pharmaceutical and healthcare use cases.
+•    Be an expert prompt engineering crafting the core logic and design of the technology solution, leveraging domain expertise related to R&D processes in life sciences.
+•    Stay ahead of the curve by continuously exploring latest advancements in GenAI.
+
+3. Technology Development & Cross-Functional Collaboration
+•    Work closely with engineering teams to design and build robust GenAI solutions, ensuring technical feasibility and alignment with business objectives.
+•    Partner with UX teams to deliver desired user experience to clients.
+•    Take end to end accountability of delivering the technology solution to clients.
+
+4. Start-Up Culture & Innovation mindset
+•    Thrive in an agile, high-performing team environment with a start-up mindset focused on speed, creativity, and adaptability.
+•    Embrace a diverse role where responsibilities span advanced prompt engineering, solution design, go-to-market efforts and continuous learning to push boundaries in GenAI applications.
+
+Preferred Candidate Profile:
+•    A fast learner with 'tech bent of mind', curiosity about GenAI, and an interest in the pharmaceutical/medical domain.
+•    A generalist mindset with a passion for developing domain-specific technology solutions.
+•    Strong collaborative and communication skills, with a flair for solution design and prompt engineering.
+•    Comfortable working in an ever-evolving environment with high expectations and a strong focus on results.
+
+Qualifications:
+•    Educational Background:
+    •    CS graduate degree, medical degree, or equivalent experience preferred.
+    •    For MBA candidates: 3–4 years of relevant experience with demonstrable skills in GenAI/technology.
+    •    For non-MBA candidates: 5–7 years of relevant experience.
+
+Experience & Skills:
+•    Advanced skills in GenAI prompting and problem-solving.
+•    Understanding of LLM platforms, RAG pipelines, and databases is a plus.
+•    Familiarity with pharmaceutical/medical processes and documentation preferred.
+•    Ability to innovate, adapt, and work collaboratively with diverse teams.
+
+What We Offer:
+•    Be the top 1% of GenAI technologists in the industry by joining a team with a proven track record of delivering numerous production-ready GenAI solutions.
+•    Build a holistic career profile with diverse skillset in a dynamic, fast-paced work environment that encourages innovation and continuous learning.
+•    A chance to shape the future of AI-driven transformation in the life sciences industry.
 
 # Quality Review Result
 
