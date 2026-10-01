@@ -5,6 +5,7 @@ import base64
 import time
 from datetime import date
 
+from auth import require_login
 from screening_logic import GENAI_CRITERIA, evaluate_genai_analysis, parse_genai_analysis
 
 # Page config
@@ -13,6 +14,8 @@ st.set_page_config(
     page_icon="📋",
     layout="wide"
 )
+
+require_login()
 
 # Model configuration (Claude on Azure via the Anthropic Messages protocol)
 AZURE_ENDPOINT = "https://ai-tanmaytiwari0064ai791136586692.openai.azure.com/"
