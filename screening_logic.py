@@ -17,7 +17,7 @@ GENAI_CRITERIA = {
 }
 
 EVIDENCE_STATUSES = {"demonstrated", "partial", "not_demonstrated"}
-GENAI_MINIMUM_YEARS = 6
+GENAI_MINIMUM_YEARS = 3
 GENAI_MINIMUM_SCORE = 6
 
 
@@ -148,7 +148,7 @@ def evaluate_genai_analysis(analysis: dict[str, Any], quality_verdict: str) -> d
     }
 
     gate_labels = {
-        "minimum_experience": "At least 6 years of clearly demonstrated professional experience",
+        "minimum_experience": f"At least {GENAI_MINIMUM_YEARS} years of clearly demonstrated professional experience",
         "hands_on_ai": "Clearly demonstrated hands-on GenAI implementation experience",
         "technical_depth": "At least partial technical solution depth",
         "minimum_score": "Final score of at least 6/8",

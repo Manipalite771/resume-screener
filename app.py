@@ -6,7 +6,12 @@ import time
 from datetime import date
 
 from auth import require_login
-from screening_logic import GENAI_CRITERIA, evaluate_genai_analysis, parse_genai_analysis
+from screening_logic import (
+    GENAI_CRITERIA,
+    GENAI_MINIMUM_YEARS,
+    evaluate_genai_analysis,
+    parse_genai_analysis,
+)
 
 # Page config
 st.set_page_config(
@@ -123,8 +128,12 @@ brand, or education. A keyword without project context does not demonstrate capa
 
 # Non-negotiable gates
 
-1. At least 6 years of clearly demonstrated full-time professional experience. Do not count
+1. At least {minimum_years} years of clearly demonstrated full-time professional experience. Do not count
    internships or overlapping roles twice. If dates are ambiguous, mark the evidence partial.
+   Candidates with 3-4 years can qualify when the rest of the profile meets the same standards.
+   Greater relevant experience is preferred, but assess the complete profile: hands-on GenAI,
+   technical depth, delivery ownership, and stakeholder leadership. Do not award extra points
+   for tenure alone or let it compensate for missing capability evidence.
 2. Hands-on GenAI implementation must score 2/2 and be demonstrated. The candidate must
    describe a professional GenAI delivery and their own contribution to prompts, RAG,
    evaluation, agents, integrations, data flow, failure analysis, or a comparable build artifact.
@@ -724,6 +733,7 @@ The resume has undergone a quality review with the following results:
         quality_summary=quality_summary,
         penalty=penalty,
         current_month=CURRENT_MONTH,
+        minimum_years=GENAI_MINIMUM_YEARS,
     )
 
     return _anthropic_messages(
@@ -758,6 +768,10 @@ def render_genai_analysis(model_response: str, quality_data: dict) -> None:
         experience = analysis["experience"]
         years = experience["total_professional_years"]
         st.markdown("### Experience gate")
+        st.caption(
+            f"Minimum {GENAI_MINIMUM_YEARS} years; strong 3-4-year profiles can qualify. "
+            "Greater relevant experience is preferred; all role-fit standards still apply."
+        )
         st.markdown(
             f"**Estimated professional experience:** {years:g} years  \n"
             f"**Evidence status:** {experience['evidence_status'].replace('_', ' ').title()}  \n"
@@ -785,7 +799,7 @@ def render_genai_analysis(model_response: str, quality_data: dict) -> None:
 
         st.markdown("### Hard gates")
         gate_labels = {
-            "minimum_experience": "Minimum 6 years demonstrated experience",
+            "minimum_experience": f"Minimum {GENAI_MINIMUM_YEARS} years demonstrated experience",
             "hands_on_ai": "Hands-on GenAI implementation: 2/2 demonstrated",
             "technical_depth": "Technical depth: at least 1/2",
             "minimum_score": "Final score: at least 6/8",

@@ -69,11 +69,43 @@ class EvaluateGenAIAnalysisTests(unittest.TestCase):
         self.assertFalse(decision["proceed"])
         self.assertFalse(decision["gates"]["hands_on_ai"])
 
-    def test_six_years_is_a_hard_gate(self):
-        self.analysis["experience"]["total_professional_years"] = 5.9
+    def test_three_years_is_a_hard_gate(self):
+        self.analysis["experience"]["total_professional_years"] = 2.9
         decision = evaluate_genai_analysis(self.analysis, "PASS")
         self.assertFalse(decision["proceed"])
         self.assertFalse(decision["gates"]["minimum_experience"])
+        self.assertIn(
+            "At least 3 years of clearly demonstrated professional experience",
+            decision["gate_failures"],
+        )
+
+    def test_strong_candidates_below_six_years_can_proceed(self):
+        for years in (3, 4, 5.9):
+            with self.subTest(years=years):
+                self.analysis["experience"]["total_professional_years"] = years
+                decision = evaluate_genai_analysis(self.analysis, "PASS")
+                self.assertTrue(decision["gates"]["minimum_experience"])
+                self.assertTrue(decision["proceed"])
+                self.assertEqual(decision["final_score"], 8)
+
+    def test_experience_still_requires_demonstrated_evidence(self):
+        for years in (3, 4, 7):
+            with self.subTest(years=years):
+                self.analysis["experience"]["total_professional_years"] = years
+                self.analysis["experience"]["evidence_status"] = "partial"
+                decision = evaluate_genai_analysis(self.analysis, "PASS")
+                self.assertFalse(decision["gates"]["minimum_experience"])
+                self.assertFalse(decision["proceed"])
+
+    def test_shorter_experience_does_not_waive_hands_on_requirement(self):
+        self.analysis["experience"]["total_professional_years"] = 3
+        self.analysis["criteria"]["hands_on_ai"]["score"] = 1
+        self.analysis["criteria"]["hands_on_ai"]["evidence_status"] = "partial"
+        decision = evaluate_genai_analysis(self.analysis, "PASS")
+        self.assertTrue(decision["gates"]["minimum_experience"])
+        self.assertEqual(decision["final_score"], 7)
+        self.assertFalse(decision["gates"]["hands_on_ai"])
+        self.assertFalse(decision["proceed"])
 
     def test_technical_depth_is_a_hard_gate(self):
         self.analysis["criteria"]["technical_depth"]["score"] = 0

@@ -3,6 +3,19 @@
 Streamlit app for screening PDF resumes for GenAI Delivery Lead, Lead Business
 Analyst, and Agentforce Engineer roles.
 
+## GenAI experience policy
+
+As of 27 October 2026, the minimum is **3 years of clearly demonstrated full-time
+professional experience**. Strong candidates with 3-4 years can qualify when their
+complete profile meets the role standards. Greater relevant experience is preferred,
+but tenure alone earns no extra points and cannot replace capability evidence.
+
+The remaining requirements are unchanged: demonstrated hands-on professional GenAI
+implementation (2/2), applied technical depth (at least 1/2), and a final score of
+at least 6/8 after any resume quality penalty. Assess delivery ownership,
+stakeholder leadership, regulated-domain experience and complex-delivery evidence
+under the existing scorecard. Coding remains optional.
+
 ## Shared sign-in
 
 The app requires a shared user ID and password before showing any screening
