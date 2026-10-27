@@ -2,10 +2,16 @@ import streamlit as st
 import requests
 import fitz  # PyMuPDF
 import base64
+import importlib
 import time
 from datetime import date
 
 from auth import require_login
+import screening_logic
+
+# Streamlit can rerun this script after a deploy while retaining imported modules.
+# Refresh the pure rules module before binding its thresholds and decision functions.
+importlib.reload(screening_logic)
 from screening_logic import (
     GENAI_CRITERIA,
     GENAI_MINIMUM_YEARS,

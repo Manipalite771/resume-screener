@@ -6,6 +6,8 @@ from unittest.mock import patch
 from streamlit.proto.TextInput_pb2 import TextInput
 from streamlit.testing.v1 import AppTest
 
+import screening_logic
+
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 TEST_USERNAME = "test-approved-user"
@@ -53,6 +55,22 @@ class SignInTests(unittest.TestCase):
         self.assert_locked(app)
         self.assertEqual([field.label for field in app.text_input], ["User ID", "Password"])
         self.assertEqual(app.text_input[1].proto.type, TextInput.PASSWORD)
+
+    def test_app_refresh_reloads_deployed_screening_rules(self):
+        analysis = {
+            "experience": {"total_professional_years": 3, "evidence_status": "demonstrated"},
+            "criteria": {
+                key: {"score": maximum, "evidence_status": "demonstrated"}
+                for key, (_, maximum) in screening_logic.GENAI_CRITERIA.items()
+            },
+        }
+        # Reproduce the live worker retaining the pre-deployment six-year threshold.
+        with patch.object(screening_logic, "GENAI_MINIMUM_YEARS", 6):
+            self.assertFalse(screening_logic.evaluate_genai_analysis(analysis, "PASS")["proceed"])
+            self.assert_locked(self.app())
+            decision = screening_logic.evaluate_genai_analysis(analysis, "PASS")
+            self.assertTrue(decision["gates"]["minimum_experience"])
+            self.assertTrue(decision["proceed"])
 
     def test_missing_or_invalid_configuration_keeps_app_locked(self):
         for setting in ("APP_USERNAME", "APP_PASSWORD"):
